@@ -293,7 +293,9 @@ function useActiveSection(toolbarRef: RefObject<HTMLElement | null>, layoutKey: 
       }
       const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
       const hashed = atBottom ? document.getElementById(window.location.hash.slice(1)) : null;
-      if (hashed?.dataset.section && hashed.getBoundingClientRect().top < window.innerHeight) current = hashed.dataset.section;
+      const box = hashed?.getBoundingClientRect();
+      // Only a target that overlaps the visible area below the toolbar counts.
+      if (hashed?.dataset.section && box && box.bottom > line && box.top < window.innerHeight) current = hashed.dataset.section;
       setActiveId(current);
     };
     const onScroll = () => {
