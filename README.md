@@ -6,7 +6,7 @@ The upstream README is the only source of content. Every build fetches it, parse
 
 ## How it works
 
-- `src/lib/parse.ts` turns the README into typed data. It reads only the region between the `Start Links` and `End Links` markers, and it throws on a bullet without a link, so a format change fails the build instead of deploying a broken page.
+- `src/lib/parse.ts` turns the README into typed data. It reads only the region between the `Start Links` and `End Links` markers, and it throws on any line it cannot place (a bullet without a link, a link outside a bullet, an unexpected heading), so a format change fails the build instead of deploying a page with missing entries.
 - `src/lib/search.ts` indexes titles, section names, descriptions and hostnames with [MiniSearch](https://github.com/lucaong/minisearch). Prefix matching is on, and terms longer than four characters tolerate typos.
 - `src/components/Directory.tsx` is the one React island. Astro renders the full list to HTML, so the page works without JavaScript. Hydration adds search, category filters and the section navigation. The query and category sync to `?q=` and `?category=`, so a search can be shared as a link.
 

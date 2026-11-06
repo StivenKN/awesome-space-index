@@ -14,25 +14,25 @@ const { sections, entries } = parseReadme(`<!-- Start Links -->
 * [Course](https://course.dev) - A course.
 <!-- End Links -->`);
 
-const summarize = (items: ReturnType<typeof tocItems>) => items.map((i) => [i.section.id, i.count, i.linked]);
+const summarize = (items: ReturnType<typeof tocItems>) => items.map((i) => [i.section.id, i.count]);
 
 describe("tocItems", () => {
   it("counts categories in total and sections by their own entries", () => {
-    expect(summarize(tocItems(sections, entries, false))).toEqual([
-      ["data", 3, true],
-      ["solar-system-data", 1, true],
-      ["orbits", 2, true],
-      ["community", 1, true],
-      ["learning", 1, true],
+    expect(summarize(tocItems(sections, entries))).toEqual([
+      ["data", 3],
+      ["solar-system-data", 1],
+      ["orbits", 2],
+      ["community", 1],
+      ["learning", 1],
     ]);
   });
 
-  it("while searching, hides empty sections and unlinks ones the page does not render", () => {
+  it("hides sections with nothing visible below them", () => {
     const orbitsOnly = entries.filter((e) => e.sectionId === "orbits");
-    expect(summarize(tocItems(sections, orbitsOnly, true))).toEqual([
-      ["data", 2, false],
-      ["solar-system-data", 0, false],
-      ["orbits", 2, true],
+    expect(summarize(tocItems(sections, orbitsOnly))).toEqual([
+      ["data", 2],
+      ["solar-system-data", 0],
+      ["orbits", 2],
     ]);
   });
 });

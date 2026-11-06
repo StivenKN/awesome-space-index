@@ -15,14 +15,14 @@ type Props = {
 
 /** One section heading with its entries. Sections with no entries render only the heading. */
 export function SectionBlock({ section, entries, matches, showPath = false }: Props) {
-  const Heading = section.depth === 4 ? "h4" : "h3";
+  // Search results drop the category h2s, so their headings move up a level.
+  const Heading = showPath ? "h2" : section.depth === 4 ? "h4" : "h3";
   const labels = showPath ? section.path : [section.title];
 
   return (
-    <section id={section.id} data-section={section.id} aria-labelledby={`${section.id}-heading`} className="scroll-mt-32 lg:scroll-mt-20">
+    <section id={section.id} data-section={section.id} className="scroll-mt-32 lg:scroll-mt-20">
       <div className="flex items-baseline gap-2 px-4 pb-2 pt-1">
         <Heading
-          id={`${section.id}-heading`}
           aria-label={labels.length > 1 ? labels.join(", ") : undefined}
           className={`text-xs font-semibold uppercase tracking-[0.07em] ${section.depth === 4 && !showPath ? "text-faint" : "text-muted"}`}
         >

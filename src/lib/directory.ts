@@ -1,20 +1,16 @@
 import type { Entry, Section } from "./parse";
 import type { Match } from "./search";
 
+export type Group = { section: Section; entries: Entry[] };
+
 export type TocItem = {
   section: Section;
   /** Categories count every entry below them. Sections count their own entries, matching their heading. */
   count: number;
-  /** False when the page has no element for this section, so the item renders as a label. */
-  linked: boolean;
 };
 
-/**
- * Builds the table of contents for the visible entries. Hides sections with
- * nothing visible below them. While searching, the page renders only sections
- * with direct matches, so categories and parent sections become plain labels.
- */
-export function tocItems(sections: Section[], visible: Entry[], searching: boolean): TocItem[] {
+/** Builds the browse-mode table of contents, hiding sections with nothing visible below them. */
+export function tocItems(sections: Section[], visible: Entry[]): TocItem[] {
   const parentOf = new Map(sections.map((s) => [s.id, s.parentId]));
   const direct = new Map<string, number>();
   const total = new Map<string, number>();
@@ -27,18 +23,14 @@ export function tocItems(sections: Section[], visible: Entry[], searching: boole
 
   return sections
     .filter((section) => total.has(section.id))
-    .map((section) => {
-      const own = direct.get(section.id) ?? 0;
-      return {
-        section,
-        count: section.depth === 2 ? (total.get(section.id) ?? 0) : own,
-        linked: !searching || own > 0,
-      };
-    });
+    .map((section) => ({
+      section,
+      count: (section.depth === 2 ? total : direct).get(section.id) ?? 0,
+    }));
 }
 
 /** Groups matched entries by section, best-scoring section first, best entry first. */
-export function groupBySection(entries: Entry[], sections: Section[], matches: Map<string, Match>) {
+export function groupBySection(entries: Entry[], sections: Section[], matches: Map<string, Match>): Group[] {
   const score = (e: Entry) => matches.get(e.id)?.score ?? 0;
   const groups = new Map<string, Entry[]>();
   for (const entry of entries) groups.set(entry.sectionId, [...(groups.get(entry.sectionId) ?? []), entry]);

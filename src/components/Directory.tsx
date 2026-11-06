@@ -37,21 +37,28 @@ export default function Directory({ categories, sections, entries, contributeUrl
   const queryMatched = matches ? entries.filter((e) => matches.has(e.id)) : entries;
   const visible = category === ALL ? queryMatched : queryMatched.filter((e) => e.categoryId === category);
   const categoryTitle = categories.find((c) => c.id === category)?.title;
-  const toc = tocItems(sections, visible, matches !== null);
+  const groups = matches ? groupBySection(visible, sections, matches) : null;
+  const toc = groups ? groups.map((g) => ({ section: g.section, count: g.entries.length })) : tocItems(sections, visible);
   const activeId = useActiveSection(toolbarRef, `${deferredQuery}|${category}`);
 
   useUrlState({ query, setQuery, category, setCategory, categories });
   useSearchShortcut(inputRef);
 
-  // When a filter change shrinks the list under a scrolled page, bring the
-  // first result up to just below the toolbar. Skips the first render so a
-  // #section link on page load keeps its position.
-  const filtered = useRef(false);
+  // When the user's own filter change shrinks the list under a scrolled page,
+  // bring the first result up to just below the toolbar. State restored from
+  // the URL on load does not count, so a #section link keeps its position.
+  const userChanged = useRef(false);
+  const changeQuery = (value: string) => {
+    userChanged.current = true;
+    setQuery(value);
+  };
+  const changeCategory = (value: string) => {
+    userChanged.current = true;
+    setCategory(value);
+  };
   useEffect(() => {
-    if (!filtered.current) {
-      filtered.current = true;
-      return;
-    }
+    if (!userChanged.current) return;
+    userChanged.current = false;
     const bar = toolbarRef.current?.getBoundingClientRect().bottom ?? 0;
     const top = resultsRef.current?.getBoundingClientRect().top ?? bar;
     if (top < bar) window.scrollBy({ top: top - bar });
@@ -61,7 +68,7 @@ export default function Directory({ categories, sections, entries, contributeUrl
     ? `${plural(visible.length, "result")} for "${deferredQuery}"${categoryTitle ? ` in ${categoryTitle}` : ""}`
     : `${plural(visible.length, "resource")}${categoryTitle ? ` in ${categoryTitle}` : ""}`;
 
-  const tocNav = <Toc items={toc} activeId={activeId} onNavigate={() => setTocOpen(false)} />;
+  const tocNav = <Toc items={toc} activeId={activeId} flat={groups !== null} onNavigate={() => setTocOpen(false)} />;
 
   return (
     <>
@@ -77,22 +84,22 @@ export default function Directory({ categories, sections, entries, contributeUrl
               ref={inputRef}
               type="search"
               value={query}
-              onValueChange={(value) => setQuery(value)}
+              onValueChange={changeQuery}
               onKeyDown={(event) => {
                 if (event.key !== "Escape") return;
-                if (query) setQuery("");
+                if (query) changeQuery("");
                 else event.currentTarget.blur();
               }}
               placeholder={`Search ${entries.length} resources`}
               autoComplete="off"
               spellCheck={false}
-              className="h-10 w-full rounded-lg border border-line bg-surface pl-9 pr-16 text-[15px] text-fg outline-none transition-[border-color,box-shadow] placeholder:text-faint focus:border-accent/60 focus:shadow-[0_0_0_3px_var(--mark)] [&::-webkit-search-cancel-button]:hidden"
+              className="h-10 w-full rounded-lg border border-line bg-surface pl-9 pr-10 text-base text-fg sm:pr-16 sm:text-[15px] outline-none transition-[border-color,box-shadow] placeholder:text-faint focus:border-accent/60 focus:shadow-[0_0_0_3px_var(--mark)] [&::-webkit-search-cancel-button]:hidden"
             />
             {query ? (
               <button
                 type="button"
                 onClick={() => {
-                  setQuery("");
+                  changeQuery("");
                   inputRef.current?.focus();
                 }}
                 aria-label="Clear search"
@@ -113,9 +120,9 @@ export default function Directory({ categories, sections, entries, contributeUrl
           <div className="flex items-center gap-2">
             <ToggleGroup
               value={[category]}
-              onValueChange={(value) => setCategory(value[0] ?? ALL)}
+              onValueChange={(value) => changeCategory(value[0] ?? ALL)}
               aria-label="Filter by category"
-              className="flex flex-1 gap-0.5 overflow-x-auto rounded-lg border border-line bg-surface p-0.5 [scrollbar-width:none] max-sm:[mask-image:linear-gradient(to_right,black_85%,transparent)]"
+              className="flex flex-1 gap-0.5 overflow-x-auto rounded-lg border border-line bg-surface p-0.5 [scrollbar-width:none]"
             >
               {[{ id: ALL, title: "All" }, ...categories].map((c) => (
                 <Toggle
@@ -184,14 +191,14 @@ export default function Directory({ categories, sections, entries, contributeUrl
               categoryTitle={categoryTitle}
               elsewhere={queryMatched.length}
               contributeUrl={contributeUrl}
-              onShowAll={() => setCategory(ALL)}
+              onShowAll={() => changeCategory(ALL)}
               onReset={() => {
-                setQuery("");
-                setCategory(ALL);
+                changeQuery("");
+                changeCategory(ALL);
               }}
             />
-          ) : matches ? (
-            groupBySection(visible, sections, matches).map(({ section, entries }) => (
+          ) : groups ? (
+            groups.map(({ section, entries }) => (
               <SectionBlock key={section.id} section={section} entries={entries} matches={matches} showPath />
             ))
           ) : (
@@ -270,7 +277,8 @@ function useActiveSection(toolbarRef: RefObject<HTMLElement | null>, layoutKey: 
     let frame = 0;
     const update = () => {
       frame = 0;
-      const line = (toolbarRef.current?.getBoundingClientRect().bottom ?? 0) + 32;
+      // 64px clears the "N results" status line that sits above the first section.
+      const line = (toolbarRef.current?.getBoundingClientRect().bottom ?? 0) + 64;
       let current: string | undefined;
       for (const el of document.querySelectorAll<HTMLElement>("[data-section]")) {
         if (el.getBoundingClientRect().top > line) break;

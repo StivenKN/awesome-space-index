@@ -103,6 +103,11 @@ describe("parseReadme", () => {
     expect(() => parseReadme(prose)).toThrow(/outside a bullet/);
   });
 
+  it("fails loudly on headings and bullets it cannot place", () => {
+    expect(() => parseReadme(readme.replace("#### Visualization", "##### Visualization"))).toThrow(/heading level/);
+    expect(() => parseReadme(readme.replace("### General Software", ""))).toThrow(/outside a ###/);
+  });
+
   it("fails loudly on a bullet without a link", () => {
     const broken = readme.replace("* [AstroPy](https://www.astropy.org)", "* AstroPy");
     expect(() => parseReadme(broken)).toThrow(/without a link/);
