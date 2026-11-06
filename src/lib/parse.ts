@@ -170,8 +170,8 @@ const LINKS_END = "<!-- End Links";
 /**
  * Parses the Awesome Space README into categories, sections and entries.
  * Only reads the region between the "Start Links" and "End Links" markers.
- * Throws when a bullet has no link, so a format change fails the build
- * instead of shipping a broken page.
+ * Throws on a bullet without a link and on any other line that holds a link,
+ * so a format change fails the build instead of silently dropping entries.
  */
 export function parseReadme(markdown: string): Directory {
   const startIndex = markdown.indexOf(LINKS_START);
@@ -187,8 +187,9 @@ export function parseReadme(markdown: string): Directory {
   let current: Section | undefined;
 
   const uniqueId = (base: string) => {
-    let id = base || "item";
-    for (let n = 2; usedIds.has(id); n += 1) id = `${base}-${n}`;
+    const safe = base || "item";
+    let id = safe;
+    for (let n = 2; usedIds.has(id); n += 1) id = `${safe}-${n}`;
     usedIds.add(id);
     return id;
   };
@@ -215,8 +216,11 @@ export function parseReadme(markdown: string): Directory {
       continue;
     }
 
-    const bullet = /^\*\s+(.+)$/.exec(line);
-    if (!bullet) continue;
+    const bullet = /^\s*[-*+]\s+(.+)$/.exec(line);
+    if (!bullet) {
+      if (line.includes("](")) throw new Error(`Link outside a bullet: ${line}`);
+      continue;
+    }
     if (!current) throw new Error(`Entry before any heading: ${line}`);
 
     const { title, description } = splitEntry(tokenize(bullet[1]));

@@ -29,7 +29,11 @@ mkdir -p .cache && curl -sL https://raw.githubusercontent.com/orbitalindex/aweso
 AWESOME_SPACE_README=.cache/README.md pnpm dev
 ```
 
-The site deploys to GitHub Pages at `/awesome-space-index`. For a custom domain, set `SITE_URL` and `BASE_PATH=/` in the workflow.
+## Deploy
+
+`.github/workflows/site.yml` deploys to GitHub Pages at `/awesome-space-index`. Set the repository's Pages source to "GitHub Actions". For a custom domain, set `SITE_URL` and `BASE_PATH=/` in the workflow.
+
+GitHub turns off scheduled workflows after 60 days with no commits to the repository. If the site stops picking up upstream changes, re-enable the workflow in the Actions tab or run it by hand.
 
 ## License
 

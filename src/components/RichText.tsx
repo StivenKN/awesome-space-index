@@ -29,7 +29,6 @@ export function RichText({ segments, terms, stretchFirstLink = false }: Props) {
       <a
         key={index}
         href={segment.href}
-        rel="noopener"
         className={
           stretched
             ? "after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-accent"

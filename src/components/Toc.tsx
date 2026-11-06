@@ -1,18 +1,16 @@
 import { useEffect, useRef } from "react";
-import type { Section } from "../lib/parse";
+import type { TocItem } from "../lib/directory";
 
 type Props = {
-  sections: Section[];
-  /** Visible entries per section, including entries in subsections. */
-  counts: Map<string, number>;
+  items: TocItem[];
   activeId: string | undefined;
   onNavigate?: () => void;
 };
 
 const INDENT = { 2: "pl-2", 3: "pl-4", 4: "pl-7" } as const;
 
-/** Table of contents. The caller passes only sections that have visible entries. */
-export function Toc({ sections, counts, activeId, onNavigate }: Props) {
+/** Table of contents. Unlinked items (no element on the page) render as plain labels. */
+export function Toc({ items, activeId, onNavigate }: Props) {
   const navRef = useRef<HTMLElement>(null);
 
   // Keep the active link inside its scroll container ([data-toc-scroll]) without moving the page.
@@ -29,26 +27,31 @@ export function Toc({ sections, counts, activeId, onNavigate }: Props) {
   return (
     <nav ref={navRef} aria-label="Sections">
       <ul className="space-y-px text-[13px]">
-        {sections.map((section) => {
-          const count = counts.get(section.id) ?? 0;
-          const active = section.id === activeId;
+        {items.map(({ section, count, linked }) => {
           const isCategory = section.depth === 2;
+          const active = linked && section.id === activeId;
+          const className = [
+            "flex items-center justify-between gap-3 rounded-md py-1 pr-2",
+            INDENT[section.depth],
+            isCategory ? "font-semibold text-fg" : linked ? "text-muted transition-colors hover:text-fg" : "text-faint",
+            active && !isCategory ? "bg-surface text-fg" : "",
+          ].join(" ");
+          const content = (
+            <>
+              <span className="truncate">{section.title}</span>
+              {count > 0 && <span className="text-[11px] tabular-nums text-faint">{count}</span>}
+            </>
+          );
+
           return (
             <li key={section.id} className={isCategory ? "pt-4 first:pt-0" : undefined}>
-              <a
-                href={`#${section.id}`}
-                onClick={onNavigate}
-                aria-current={active ? "location" : undefined}
-                className={[
-                  "flex items-center justify-between gap-3 rounded-md py-1 pr-2 transition-colors",
-                  INDENT[section.depth],
-                  isCategory ? "font-semibold text-fg" : "text-muted hover:text-fg",
-                  active && !isCategory ? "bg-surface text-fg" : "",
-                ].join(" ")}
-              >
-                <span className="truncate">{section.title}</span>
-                <span className="text-[11px] tabular-nums text-faint">{count}</span>
-              </a>
+              {linked ? (
+                <a href={`#${section.id}`} onClick={onNavigate} aria-current={active ? "location" : undefined} className={className}>
+                  {content}
+                </a>
+              ) : (
+                <span className={className}>{content}</span>
+              )}
             </li>
           );
         })}

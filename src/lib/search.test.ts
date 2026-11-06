@@ -36,4 +36,11 @@ describe("highlight", () => {
       { text: " orbits", match: false },
     ]);
   });
+
+  it("skips matches in the middle of a word", () => {
+    expect(highlight("suborbital orbital", ["orbital"])).toEqual([
+      { text: "suborbital ", match: false },
+      { text: "orbital", match: true },
+    ]);
+  });
 });

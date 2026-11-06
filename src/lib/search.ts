@@ -35,10 +35,11 @@ export function createSearch(entries: Entry[], sections: Section[]) {
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/** Splits `text` into runs, flagging the ones that start with a matched term. */
+/** Splits `text` into runs, flagging matched terms that start at a word boundary. */
 export function highlight(text: string, terms: string[]) {
   if (terms.length === 0) return [{ text, match: false }];
-  const pattern = new RegExp(`(${terms.map(escape).sort((a, b) => b.length - a.length).join("|")})`, "gi");
+  const alternatives = terms.map(escape).sort((a, b) => b.length - a.length).join("|");
+  const pattern = new RegExp(`(?<![\\p{L}\\p{N}])(${alternatives})`, "giu");
   return text
     .split(pattern)
     .filter(Boolean)

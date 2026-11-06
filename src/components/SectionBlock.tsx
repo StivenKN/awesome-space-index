@@ -19,16 +19,21 @@ export function SectionBlock({ section, entries, matches, showPath = false }: Pr
   const labels = showPath ? section.path : [section.title];
 
   return (
-    <section id={section.id} data-section={section.id} aria-labelledby={`${section.id}-heading`} className="scroll-mt-32 md:scroll-mt-20">
-      <div className="flex items-baseline gap-2 px-4 pb-2">
+    <section id={section.id} data-section={section.id} aria-labelledby={`${section.id}-heading`} className="scroll-mt-32 lg:scroll-mt-20">
+      <div className="flex items-baseline gap-2 px-4 pb-2 pt-1">
         <Heading
           id={`${section.id}-heading`}
-          className={section.depth === 4 && !showPath ? "text-sm font-medium text-muted" : "text-[15px] font-semibold tracking-[-0.01em]"}
+          aria-label={labels.length > 1 ? labels.join(", ") : undefined}
+          className={`text-xs font-semibold uppercase tracking-[0.07em] ${section.depth === 4 && !showPath ? "text-faint" : "text-muted"}`}
         >
           {labels.map((label, i) => (
             <span key={label} className={i < labels.length - 1 ? "text-faint" : undefined}>
               {label}
-              {i < labels.length - 1 && <span className="px-1.5 text-faint/60">/</span>}
+              {i < labels.length - 1 && (
+                <span aria-hidden className="px-1.5 opacity-60">
+                  /
+                </span>
+              )}
             </span>
           ))}
         </Heading>

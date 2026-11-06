@@ -9,6 +9,7 @@ const directory = await loadDirectory();
 const sectionCount = directory.sections.filter((s) => s.depth > 2).length;
 const contributeUrl = `${UPSTREAM_REPO}/blob/master/contributing.md`;
 const siteRepo = "https://github.com/StivenKN/awesome-space-index";
+const base = import.meta.env.BASE_URL.replace(/\/?$/, "/");
 const builtOn = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
 const stats = [
@@ -23,7 +24,7 @@ const stats = [
   description={`Search ${directory.entries.length} curated open resources for astronomy, Earth observation, mission design and spacecraft engineering, from The Orbital Index's Awesome Space list.`}
 >
   <header class="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
-    <a href={import.meta.env.BASE_URL} class="flex items-center gap-2 text-[15px] font-semibold tracking-[-0.01em]">
+    <a href={base} class="flex items-center gap-2 text-[15px] font-semibold tracking-[-0.01em]">
       <Logo class="size-5" />
       Awesome Space
     </a>
@@ -68,12 +69,9 @@ const stats = [
         <dl class="mt-10 flex gap-6 text-sm sm:gap-10">
           {
             stats.map((stat) => (
-              <div>
-                <dt class="sr-only">{stat.label}</dt>
-                <dd>
-                  <span class="text-2xl font-semibold tabular-nums tracking-[-0.03em] text-fg">{stat.value}</span>
-                  <span class="ml-1.5 text-muted">{stat.label}</span>
-                </dd>
+              <div class="flex items-baseline gap-1.5">
+                <dt class="order-last text-muted">{stat.label}</dt>
+                <dd class="text-2xl font-semibold tabular-nums tracking-[-0.03em] text-fg">{stat.value}</dd>
               </div>
             ))
           }
@@ -94,7 +92,7 @@ const stats = [
         </span>
       </p>
       <p>
-        Synced {builtOn} · <a href={siteRepo} class="text-fg hover:underline">Site source</a>
+        Built {builtOn} · <a href={siteRepo} class="text-fg hover:underline">Site source</a>
       </p>
     </div>
   </footer>

@@ -4,15 +4,17 @@ import { ScrollArea } from "@base-ui/react/scroll-area";
 import { Toggle } from "@base-ui/react/toggle";
 import { ToggleGroup } from "@base-ui/react/toggle-group";
 import { Bars3BottomLeftIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/16/solid";
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import type { Directory as DirectoryData, Entry, Section } from "../lib/parse";
-import { createSearch, type Match } from "../lib/search";
+import { useDeferredValue, useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
+import { groupBySection, tocItems } from "../lib/directory";
+import type { Directory as DirectoryData, Section } from "../lib/parse";
+import { createSearch } from "../lib/search";
 import { SectionBlock } from "./SectionBlock";
 import { Toc } from "./Toc";
 
 type Props = DirectoryData & { contributeUrl: string };
 
 const ALL = "all";
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * The searchable list. Server-rendered in full so it works without JavaScript,
@@ -23,7 +25,9 @@ export default function Directory({ categories, sections, entries, contributeUrl
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(ALL);
   const [tocOpen, setTocOpen] = useState(false);
+  const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const resultsRef = useRef<HTMLDivElement>(null);
 
   const search = useMemo(() => createSearch(entries, sections), [entries, sections]);
@@ -32,36 +36,44 @@ export default function Directory({ categories, sections, entries, contributeUrl
 
   const queryMatched = matches ? entries.filter((e) => matches.has(e.id)) : entries;
   const visible = category === ALL ? queryMatched : queryMatched.filter((e) => e.categoryId === category);
-  const groups = groupBySection(visible, sections, matches);
-  const counts = countWithAncestors(visible, sections);
-  const tocSections = sections.filter((s) => counts.has(s.id));
-  const activeId = useActiveSection(groups.length);
+  const categoryTitle = categories.find((c) => c.id === category)?.title;
+  const toc = tocItems(sections, visible, matches !== null);
+  const activeId = useActiveSection(toolbarRef, `${deferredQuery}|${category}`);
 
   useUrlState({ query, setQuery, category, setCategory, categories });
   useSearchShortcut(inputRef);
 
-  // Keep the first result in view when the list shrinks under a scrolled page.
-  // Skips the first render so a #section link on page load keeps its position.
+  // When a filter change shrinks the list under a scrolled page, bring the
+  // first result up to just below the toolbar. Skips the first render so a
+  // #section link on page load keeps its position.
   const filtered = useRef(false);
   useEffect(() => {
     if (!filtered.current) {
       filtered.current = true;
       return;
     }
-    const top = resultsRef.current?.getBoundingClientRect().top;
-    if (top !== undefined && top < 0) window.scrollBy({ top: top - 8 });
+    const bar = toolbarRef.current?.getBoundingClientRect().bottom ?? 0;
+    const top = resultsRef.current?.getBoundingClientRect().top ?? bar;
+    if (top < bar) window.scrollBy({ top: top - bar });
   }, [deferredQuery, category]);
 
-  const toc = <Toc sections={tocSections} counts={counts} activeId={activeId} onNavigate={() => setTocOpen(false)} />;
+  const status = matches
+    ? `${plural(visible.length, "result")} for "${deferredQuery}"${categoryTitle ? ` in ${categoryTitle}` : ""}`
+    : `${plural(visible.length, "resource")}${categoryTitle ? ` in ${categoryTitle}` : ""}`;
+
+  const tocNav = <Toc items={toc} activeId={activeId} onNavigate={() => setTocOpen(false)} />;
 
   return (
     <>
-      <div className="sticky top-0 z-30 border-b border-line bg-bg/80 backdrop-blur-xl backdrop-saturate-150">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:px-6 md:flex-row md:items-center">
-          <label className="group relative flex flex-1 items-center">
-            <span className="sr-only">Search resources</span>
+      <div ref={toolbarRef} className="sticky top-0 z-30 border-b border-line bg-bg/80 backdrop-blur-xl backdrop-saturate-150">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center">
+          <div className="relative flex flex-1 items-center">
+            <label htmlFor={inputId} className="sr-only">
+              Search resources
+            </label>
             <MagnifyingGlassIcon aria-hidden className="pointer-events-none absolute left-3 size-4 text-faint" />
             <Input
+              id={inputId}
               ref={inputRef}
               type="search"
               value={query}
@@ -74,7 +86,7 @@ export default function Directory({ categories, sections, entries, contributeUrl
               placeholder={`Search ${entries.length} resources`}
               autoComplete="off"
               spellCheck={false}
-              className="h-10 w-full rounded-lg border border-line bg-surface pl-9 pr-16 text-[15px] text-fg placeholder:text-faint transition-[border-color,box-shadow] outline-none focus:border-line-strong focus:shadow-[0_0_0_4px_var(--line)] [&::-webkit-search-cancel-button]:hidden"
+              className="h-10 w-full rounded-lg border border-line bg-surface pl-9 pr-16 text-[15px] text-fg outline-none transition-[border-color,box-shadow] placeholder:text-faint focus:border-accent/60 focus:shadow-[0_0_0_3px_var(--mark)] [&::-webkit-search-cancel-button]:hidden"
             />
             {query ? (
               <button
@@ -89,18 +101,21 @@ export default function Directory({ categories, sections, entries, contributeUrl
                 <XMarkIcon className="size-4" />
               </button>
             ) : (
-              <kbd className="pointer-events-none absolute right-2.5 hidden rounded border border-line px-1.5 font-sans text-[11px] leading-5 text-faint sm:block">
+              <kbd
+                aria-hidden
+                className="pointer-events-none absolute right-2.5 hidden rounded border border-line px-1.5 font-sans text-[11px] leading-5 text-faint sm:block"
+              >
                 /
               </kbd>
             )}
-          </label>
+          </div>
 
           <div className="flex items-center gap-2">
             <ToggleGroup
               value={[category]}
               onValueChange={(value) => setCategory(value[0] ?? ALL)}
               aria-label="Filter by category"
-              className="flex flex-1 gap-0.5 overflow-x-auto rounded-lg border border-line bg-surface p-0.5 [scrollbar-width:none]"
+              className="flex flex-1 gap-0.5 overflow-x-auto rounded-lg border border-line bg-surface p-0.5 [scrollbar-width:none] max-sm:[mask-image:linear-gradient(to_right,black_85%,transparent)]"
             >
               {[{ id: ALL, title: "All" }, ...categories].map((c) => (
                 <Toggle
@@ -132,7 +147,9 @@ export default function Directory({ categories, sections, entries, contributeUrl
                       <XMarkIcon className="size-4" />
                     </Dialog.Close>
                   </div>
-                  <div data-toc-scroll className="flex-1 overflow-y-auto px-3 py-4">{toc}</div>
+                  <div data-toc-scroll className="flex-1 overflow-y-auto px-3 py-4">
+                    {tocNav}
+                  </div>
                 </Dialog.Popup>
               </Dialog.Portal>
             </Dialog.Root>
@@ -145,7 +162,9 @@ export default function Directory({ categories, sections, entries, contributeUrl
           {/* ScrollArea.Root sets position: relative, so the sticky offset lives on a wrapper. */}
           <div className="sticky top-[5.5rem] h-[calc(100dvh-6.5rem)]">
             <ScrollArea.Root className="h-full">
-              <ScrollArea.Viewport data-toc-scroll className="h-full overscroll-contain pb-8 pr-3">{toc}</ScrollArea.Viewport>
+              <ScrollArea.Viewport data-toc-scroll className="h-full overscroll-contain pb-8 pr-3">
+                {tocNav}
+              </ScrollArea.Viewport>
               <ScrollArea.Scrollbar className="flex w-1 justify-center rounded opacity-0 transition-opacity data-[hovering]:opacity-100 data-[scrolling]:opacity-100">
                 <ScrollArea.Thumb className="w-full rounded bg-line-strong" />
               </ScrollArea.Scrollbar>
@@ -153,25 +172,33 @@ export default function Directory({ categories, sections, entries, contributeUrl
           </div>
         </aside>
 
-        <div ref={resultsRef} className="-mx-4 min-w-0 scroll-mt-24 pb-24" aria-live="polite" aria-busy={query.trim() !== deferredQuery}>
-          {matches && (
-            <p className="px-4 pb-6 text-sm text-muted">
-              {visible.length === 1 ? "1 result" : `${visible.length} results`} for{" "}
-              <span className="font-medium text-fg">"{deferredQuery}"</span>
-            </p>
-          )}
+        <div ref={resultsRef} className="-mx-4 min-w-0 pb-24">
+          {/* The one live region: a short status line, visible only while searching. */}
+          <p aria-live="polite" className={matches ? "px-4 pb-6 text-sm text-muted" : "sr-only"}>
+            {status}
+          </p>
 
           {visible.length === 0 ? (
-            <EmptyState query={deferredQuery} contributeUrl={contributeUrl} onReset={() => { setQuery(""); setCategory(ALL); }} />
+            <EmptyState
+              query={deferredQuery}
+              categoryTitle={categoryTitle}
+              elsewhere={queryMatched.length}
+              contributeUrl={contributeUrl}
+              onShowAll={() => setCategory(ALL)}
+              onReset={() => {
+                setQuery("");
+                setCategory(ALL);
+              }}
+            />
           ) : matches ? (
-            groups.map(({ section, entries }) => (
+            groupBySection(visible, sections, matches).map(({ section, entries }) => (
               <SectionBlock key={section.id} section={section} entries={entries} matches={matches} showPath />
             ))
           ) : (
             categories
               .filter((c) => category === ALL || c.id === category)
               .map((c) => (
-                <div key={c.id} id={c.id} data-section={c.id} className="scroll-mt-32 pb-6 md:scroll-mt-20">
+                <div key={c.id} id={c.id} data-section={c.id} className="scroll-mt-32 pb-6 lg:scroll-mt-20">
                   <h2 className="px-4 pb-6 text-2xl font-semibold tracking-[-0.025em]">{c.title}</h2>
                   {sections
                     .filter((s) => s.categoryId === c.id && s.depth > 2)
@@ -192,10 +219,35 @@ export default function Directory({ categories, sections, entries, contributeUrl
   );
 }
 
-function EmptyState({ query, contributeUrl, onReset }: { query: string; contributeUrl: string; onReset: () => void }) {
+type EmptyStateProps = {
+  query: string;
+  categoryTitle: string | undefined;
+  /** Matches across all categories. Non-zero means the category filter hid them. */
+  elsewhere: number;
+  contributeUrl: string;
+  onShowAll: () => void;
+  onReset: () => void;
+};
+
+function EmptyState({ query, categoryTitle, elsewhere, contributeUrl, onShowAll, onReset }: EmptyStateProps) {
+  const button =
+    "mt-6 rounded-lg border border-line bg-surface px-3 py-1.5 text-[13px] font-medium transition-colors hover:border-line-strong";
+
+  if (categoryTitle && elsewhere > 0) {
+    return (
+      <div className="mx-4 rounded-2xl border border-dashed border-line-strong px-6 py-16 text-center">
+        <p className="text-[15px] font-medium">No results in {categoryTitle}</p>
+        <p className="mt-1.5 text-sm text-muted">{plural(elsewhere, "match", "matches")} in other categories.</p>
+        <button type="button" onClick={onShowAll} className={button}>
+          Search all categories
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-4 rounded-2xl border border-dashed border-line-strong px-6 py-16 text-center">
-      <p className="text-[15px] font-medium">Nothing matches {query ? `"${query}"` : "this filter"}</p>
+      <p className="text-[15px] font-medium">Nothing matches "{query}"</p>
       <p className="mt-1.5 text-sm text-muted">
         Try a broader term, or{" "}
         <a href={contributeUrl} className="text-fg underline decoration-line-strong underline-offset-[3px] hover:decoration-current">
@@ -203,53 +255,25 @@ function EmptyState({ query, contributeUrl, onReset }: { query: string; contribu
         </a>{" "}
         for the list.
       </p>
-      <button
-        type="button"
-        onClick={onReset}
-        className="mt-6 rounded-lg border border-line bg-surface px-3 py-1.5 text-[13px] font-medium transition-colors hover:border-line-strong"
-      >
+      <button type="button" onClick={onReset} className={button}>
         Clear search
       </button>
     </div>
   );
 }
 
-/** Groups matched entries by section, best-scoring section first, best entry first. */
-function groupBySection(entries: Entry[], sections: Section[], matches: Map<string, Match> | null) {
-  if (!matches) return [];
-  const score = (e: Entry) => matches.get(e.id)?.score ?? 0;
-  const byId = new Map(sections.map((s) => [s.id, s]));
-  const groups = new Map<string, Entry[]>();
-  for (const entry of entries) groups.set(entry.sectionId, [...(groups.get(entry.sectionId) ?? []), entry]);
-
-  return [...groups]
-    .map(([id, list]) => ({ section: byId.get(id)!, entries: list.sort((a, b) => score(b) - score(a)) }))
-    .sort((a, b) => score(b.entries[0]) - score(a.entries[0]));
-}
-
-/** Counts entries per section, adding each entry to every ancestor section too. */
-function countWithAncestors(entries: Entry[], sections: Section[]) {
-  const parentOf = new Map(sections.map((s) => [s.id, s.parentId]));
-  const counts = new Map<string, number>();
-  for (const entry of entries) {
-    for (let id: string | undefined = entry.sectionId; id; id = parentOf.get(id)) {
-      counts.set(id, (counts.get(id) ?? 0) + 1);
-    }
-  }
-  return counts;
-}
-
-/** Tracks the last section whose top has scrolled past the sticky toolbar. */
-function useActiveSection(layoutKey: number) {
+/** Tracks the last section whose top has scrolled under the sticky toolbar. `layoutKey` re-runs it when the list changes. */
+function useActiveSection(toolbarRef: RefObject<HTMLElement | null>, layoutKey: string) {
   const [activeId, setActiveId] = useState<string>();
 
   useEffect(() => {
     let frame = 0;
     const update = () => {
       frame = 0;
+      const line = (toolbarRef.current?.getBoundingClientRect().bottom ?? 0) + 32;
       let current: string | undefined;
       for (const el of document.querySelectorAll<HTMLElement>("[data-section]")) {
-        if (el.getBoundingClientRect().top > 140) break;
+        if (el.getBoundingClientRect().top > line) break;
         current = el.dataset.section;
       }
       setActiveId(current);
@@ -263,13 +287,13 @@ function useActiveSection(layoutKey: number) {
       window.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(frame);
     };
-  }, [layoutKey]);
+  }, [toolbarRef, layoutKey]);
 
   return activeId;
 }
 
 /** Focuses the search field on "/" or Cmd/Ctrl+K, unless the user is typing elsewhere. */
-function useSearchShortcut(inputRef: React.RefObject<HTMLInputElement | null>) {
+function useSearchShortcut(inputRef: RefObject<HTMLInputElement | null>) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
@@ -294,7 +318,11 @@ type UrlState = {
   categories: Section[];
 };
 
-/** Reads ?q= and ?category= once after hydration, then mirrors state back with replaceState. */
+/**
+ * Reads ?q= and ?category= once after hydration, then mirrors state back with
+ * replaceState. The write effect skips its first run, which still sees the
+ * pre-URL state and would otherwise strip the params before they apply.
+ */
 function useUrlState({ query, setQuery, category, setCategory, categories }: UrlState) {
   const ready = useRef(false);
 
@@ -303,11 +331,13 @@ function useUrlState({ query, setQuery, category, setCategory, categories }: Url
     setQuery(params.get("q") ?? "");
     const fromUrl = params.get("category");
     if (fromUrl && categories.some((c) => c.id === fromUrl)) setCategory(fromUrl);
-    ready.current = true;
   }, []);
 
   useEffect(() => {
-    if (!ready.current) return;
+    if (!ready.current) {
+      ready.current = true;
+      return;
+    }
     const url = new URL(window.location.href);
     const set = (key: string, value: string) => (value ? url.searchParams.set(key, value) : url.searchParams.delete(key));
     set("q", query.trim());

@@ -93,6 +93,16 @@ describe("parseReadme", () => {
     expect(entries[8].url).toBe("https://en.wikipedia.org/wiki/Orbit_(disambiguation)");
   });
 
+  it("reads dash and indented bullets", () => {
+    const withDash = readme.replace("* [SpaceEngine]", "- [SpaceEngine]").replace("* [Space Jargon]", "  * [Space Jargon]");
+    expect(parseReadme(withDash).entries).toHaveLength(9);
+  });
+
+  it("fails loudly on a link it would otherwise drop", () => {
+    const prose = readme.replace("* [AstroPy]", "See [AstroPy]");
+    expect(() => parseReadme(prose)).toThrow(/outside a bullet/);
+  });
+
   it("fails loudly on a bullet without a link", () => {
     const broken = readme.replace("* [AstroPy](https://www.astropy.org)", "* AstroPy");
     expect(() => parseReadme(broken)).toThrow(/without a link/);
