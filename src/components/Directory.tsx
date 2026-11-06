@@ -1,0 +1,317 @@
+import { Dialog } from "@base-ui/react/dialog";
+import { Input } from "@base-ui/react/input";
+import { ScrollArea } from "@base-ui/react/scroll-area";
+import { Toggle } from "@base-ui/react/toggle";
+import { ToggleGroup } from "@base-ui/react/toggle-group";
+import { Bars3BottomLeftIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/16/solid";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import type { Directory as DirectoryData, Entry, Section } from "../lib/parse";
+import { createSearch, type Match } from "../lib/search";
+import { SectionBlock } from "./SectionBlock";
+import { Toc } from "./Toc";
+
+type Props = DirectoryData & { contributeUrl: string };
+
+const ALL = "all";
+
+/**
+ * The searchable list. Server-rendered in full so it works without JavaScript,
+ * then hydrated for search, category filters and the table of contents.
+ * The query and category live in the URL (?q=&category=) so results are shareable.
+ */
+export default function Directory({ categories, sections, entries, contributeUrl }: Props) {
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState(ALL);
+  const [tocOpen, setTocOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+
+  const search = useMemo(() => createSearch(entries, sections), [entries, sections]);
+  const deferredQuery = useDeferredValue(query.trim());
+  const matches = useMemo(() => (deferredQuery ? search(deferredQuery) : null), [search, deferredQuery]);
+
+  const queryMatched = matches ? entries.filter((e) => matches.has(e.id)) : entries;
+  const visible = category === ALL ? queryMatched : queryMatched.filter((e) => e.categoryId === category);
+  const groups = groupBySection(visible, sections, matches);
+  const counts = countWithAncestors(visible, sections);
+  const tocSections = sections.filter((s) => counts.has(s.id));
+  const activeId = useActiveSection(groups.length);
+
+  useUrlState({ query, setQuery, category, setCategory, categories });
+  useSearchShortcut(inputRef);
+
+  // Keep the first result in view when the list shrinks under a scrolled page.
+  // Skips the first render so a #section link on page load keeps its position.
+  const filtered = useRef(false);
+  useEffect(() => {
+    if (!filtered.current) {
+      filtered.current = true;
+      return;
+    }
+    const top = resultsRef.current?.getBoundingClientRect().top;
+    if (top !== undefined && top < 0) window.scrollBy({ top: top - 8 });
+  }, [deferredQuery, category]);
+
+  const toc = <Toc sections={tocSections} counts={counts} activeId={activeId} onNavigate={() => setTocOpen(false)} />;
+
+  return (
+    <>
+      <div className="sticky top-0 z-30 border-b border-line bg-bg/80 backdrop-blur-xl backdrop-saturate-150">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:px-6 md:flex-row md:items-center">
+          <label className="group relative flex flex-1 items-center">
+            <span className="sr-only">Search resources</span>
+            <MagnifyingGlassIcon aria-hidden className="pointer-events-none absolute left-3 size-4 text-faint" />
+            <Input
+              ref={inputRef}
+              type="search"
+              value={query}
+              onValueChange={(value) => setQuery(value)}
+              onKeyDown={(event) => {
+                if (event.key !== "Escape") return;
+                if (query) setQuery("");
+                else event.currentTarget.blur();
+              }}
+              placeholder={`Search ${entries.length} resources`}
+              autoComplete="off"
+              spellCheck={false}
+              className="h-10 w-full rounded-lg border border-line bg-surface pl-9 pr-16 text-[15px] text-fg placeholder:text-faint transition-[border-color,box-shadow] outline-none focus:border-line-strong focus:shadow-[0_0_0_4px_var(--line)] [&::-webkit-search-cancel-button]:hidden"
+            />
+            {query ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  inputRef.current?.focus();
+                }}
+                aria-label="Clear search"
+                className="absolute right-2 grid size-6 place-items-center rounded-md text-faint transition-colors hover:bg-line hover:text-fg"
+              >
+                <XMarkIcon className="size-4" />
+              </button>
+            ) : (
+              <kbd className="pointer-events-none absolute right-2.5 hidden rounded border border-line px-1.5 font-sans text-[11px] leading-5 text-faint sm:block">
+                /
+              </kbd>
+            )}
+          </label>
+
+          <div className="flex items-center gap-2">
+            <ToggleGroup
+              value={[category]}
+              onValueChange={(value) => setCategory(value[0] ?? ALL)}
+              aria-label="Filter by category"
+              className="flex flex-1 gap-0.5 overflow-x-auto rounded-lg border border-line bg-surface p-0.5 [scrollbar-width:none]"
+            >
+              {[{ id: ALL, title: "All" }, ...categories].map((c) => (
+                <Toggle
+                  key={c.id}
+                  value={c.id}
+                  className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-muted transition-colors hover:text-fg data-[pressed]:bg-elevated data-[pressed]:text-fg data-[pressed]:shadow-[0_1px_2px_rgb(0_0_0/0.08),0_0_0_1px_var(--line)]"
+                >
+                  {c.title}
+                  <span className="text-[11px] tabular-nums text-faint">
+                    {c.id === ALL ? queryMatched.length : queryMatched.filter((e) => e.categoryId === c.id).length}
+                  </span>
+                </Toggle>
+              ))}
+            </ToggleGroup>
+
+            <Dialog.Root open={tocOpen} onOpenChange={setTocOpen}>
+              <Dialog.Trigger
+                aria-label="Browse sections"
+                className="grid size-9 shrink-0 place-items-center rounded-lg border border-line bg-surface text-muted transition-colors hover:text-fg lg:hidden"
+              >
+                <Bars3BottomLeftIcon className="size-4" />
+              </Dialog.Trigger>
+              <Dialog.Portal>
+                <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm transition-opacity duration-200 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0" />
+                <Dialog.Popup className="fixed inset-y-0 left-0 z-50 flex w-[min(20rem,85vw)] flex-col border-r border-line bg-bg shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] data-[ending-style]:-translate-x-full data-[starting-style]:-translate-x-full">
+                  <div className="flex items-center justify-between border-b border-line px-5 py-4">
+                    <Dialog.Title className="text-sm font-semibold">Sections</Dialog.Title>
+                    <Dialog.Close aria-label="Close" className="grid size-7 place-items-center rounded-md text-faint hover:bg-surface hover:text-fg">
+                      <XMarkIcon className="size-4" />
+                    </Dialog.Close>
+                  </div>
+                  <div data-toc-scroll className="flex-1 overflow-y-auto px-3 py-4">{toc}</div>
+                </Dialog.Popup>
+              </Dialog.Portal>
+            </Dialog.Root>
+          </div>
+        </div>
+      </div>
+
+      <div className="mx-auto grid max-w-6xl gap-10 px-4 pt-8 sm:px-6 lg:grid-cols-[15rem_1fr]">
+        <aside className="hidden lg:block">
+          {/* ScrollArea.Root sets position: relative, so the sticky offset lives on a wrapper. */}
+          <div className="sticky top-[5.5rem] h-[calc(100dvh-6.5rem)]">
+            <ScrollArea.Root className="h-full">
+              <ScrollArea.Viewport data-toc-scroll className="h-full overscroll-contain pb-8 pr-3">{toc}</ScrollArea.Viewport>
+              <ScrollArea.Scrollbar className="flex w-1 justify-center rounded opacity-0 transition-opacity data-[hovering]:opacity-100 data-[scrolling]:opacity-100">
+                <ScrollArea.Thumb className="w-full rounded bg-line-strong" />
+              </ScrollArea.Scrollbar>
+            </ScrollArea.Root>
+          </div>
+        </aside>
+
+        <div ref={resultsRef} className="-mx-4 min-w-0 scroll-mt-24 pb-24" aria-live="polite" aria-busy={query.trim() !== deferredQuery}>
+          {matches && (
+            <p className="px-4 pb-6 text-sm text-muted">
+              {visible.length === 1 ? "1 result" : `${visible.length} results`} for{" "}
+              <span className="font-medium text-fg">"{deferredQuery}"</span>
+            </p>
+          )}
+
+          {visible.length === 0 ? (
+            <EmptyState query={deferredQuery} contributeUrl={contributeUrl} onReset={() => { setQuery(""); setCategory(ALL); }} />
+          ) : matches ? (
+            groups.map(({ section, entries }) => (
+              <SectionBlock key={section.id} section={section} entries={entries} matches={matches} showPath />
+            ))
+          ) : (
+            categories
+              .filter((c) => category === ALL || c.id === category)
+              .map((c) => (
+                <div key={c.id} id={c.id} data-section={c.id} className="scroll-mt-32 pb-6 md:scroll-mt-20">
+                  <h2 className="px-4 pb-6 text-2xl font-semibold tracking-[-0.025em]">{c.title}</h2>
+                  {sections
+                    .filter((s) => s.categoryId === c.id && s.depth > 2)
+                    .map((section) => (
+                      <SectionBlock
+                        key={section.id}
+                        section={section}
+                        entries={visible.filter((e) => e.sectionId === section.id)}
+                        matches={null}
+                      />
+                    ))}
+                </div>
+              ))
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function EmptyState({ query, contributeUrl, onReset }: { query: string; contributeUrl: string; onReset: () => void }) {
+  return (
+    <div className="mx-4 rounded-2xl border border-dashed border-line-strong px-6 py-16 text-center">
+      <p className="text-[15px] font-medium">Nothing matches {query ? `"${query}"` : "this filter"}</p>
+      <p className="mt-1.5 text-sm text-muted">
+        Try a broader term, or{" "}
+        <a href={contributeUrl} className="text-fg underline decoration-line-strong underline-offset-[3px] hover:decoration-current">
+          suggest a resource
+        </a>{" "}
+        for the list.
+      </p>
+      <button
+        type="button"
+        onClick={onReset}
+        className="mt-6 rounded-lg border border-line bg-surface px-3 py-1.5 text-[13px] font-medium transition-colors hover:border-line-strong"
+      >
+        Clear search
+      </button>
+    </div>
+  );
+}
+
+/** Groups matched entries by section, best-scoring section first, best entry first. */
+function groupBySection(entries: Entry[], sections: Section[], matches: Map<string, Match> | null) {
+  if (!matches) return [];
+  const score = (e: Entry) => matches.get(e.id)?.score ?? 0;
+  const byId = new Map(sections.map((s) => [s.id, s]));
+  const groups = new Map<string, Entry[]>();
+  for (const entry of entries) groups.set(entry.sectionId, [...(groups.get(entry.sectionId) ?? []), entry]);
+
+  return [...groups]
+    .map(([id, list]) => ({ section: byId.get(id)!, entries: list.sort((a, b) => score(b) - score(a)) }))
+    .sort((a, b) => score(b.entries[0]) - score(a.entries[0]));
+}
+
+/** Counts entries per section, adding each entry to every ancestor section too. */
+function countWithAncestors(entries: Entry[], sections: Section[]) {
+  const parentOf = new Map(sections.map((s) => [s.id, s.parentId]));
+  const counts = new Map<string, number>();
+  for (const entry of entries) {
+    for (let id: string | undefined = entry.sectionId; id; id = parentOf.get(id)) {
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+/** Tracks the last section whose top has scrolled past the sticky toolbar. */
+function useActiveSection(layoutKey: number) {
+  const [activeId, setActiveId] = useState<string>();
+
+  useEffect(() => {
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      let current: string | undefined;
+      for (const el of document.querySelectorAll<HTMLElement>("[data-section]")) {
+        if (el.getBoundingClientRect().top > 140) break;
+        current = el.dataset.section;
+      }
+      setActiveId(current);
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(frame);
+    };
+  }, [layoutKey]);
+
+  return activeId;
+}
+
+/** Focuses the search field on "/" or Cmd/Ctrl+K, unless the user is typing elsewhere. */
+function useSearchShortcut(inputRef: React.RefObject<HTMLInputElement | null>) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      const typing = target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+      const slash = event.key === "/" && !typing;
+      const modK = event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey);
+      if (!slash && !modK) return;
+      event.preventDefault();
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [inputRef]);
+}
+
+type UrlState = {
+  query: string;
+  setQuery: (q: string) => void;
+  category: string;
+  setCategory: (c: string) => void;
+  categories: Section[];
+};
+
+/** Reads ?q= and ?category= once after hydration, then mirrors state back with replaceState. */
+function useUrlState({ query, setQuery, category, setCategory, categories }: UrlState) {
+  const ready = useRef(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setQuery(params.get("q") ?? "");
+    const fromUrl = params.get("category");
+    if (fromUrl && categories.some((c) => c.id === fromUrl)) setCategory(fromUrl);
+    ready.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!ready.current) return;
+    const url = new URL(window.location.href);
+    const set = (key: string, value: string) => (value ? url.searchParams.set(key, value) : url.searchParams.delete(key));
+    set("q", query.trim());
+    set("category", category === ALL ? "" : category);
+    if (url.href !== window.location.href) window.history.replaceState(null, "", url);
+  }, [query, category]);
+}
