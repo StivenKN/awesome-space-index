@@ -293,9 +293,10 @@ function useActiveSection(toolbarRef: RefObject<HTMLElement | null>, layoutKey: 
       }
       const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
       const hashed = atBottom ? document.getElementById(window.location.hash.slice(1)) : null;
-      const box = hashed?.getBoundingClientRect();
-      // Only a target that overlaps the visible area below the toolbar counts.
-      if (hashed?.dataset.section && box && box.bottom > line && box.top < window.innerHeight) current = hashed.dataset.section;
+      // Only a target whose heading is on screen but could not reach the line. One above
+      // the line is already handled by the loop, and one off screen was scrolled past.
+      const top = hashed?.getBoundingClientRect().top ?? 0;
+      if (hashed?.dataset.section && top > line && top < window.innerHeight) current = hashed.dataset.section;
       setActiveId(current);
     };
     const onScroll = () => {
