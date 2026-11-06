@@ -43,7 +43,7 @@ export function Toc({ items, activeId, flat, onNavigate }: Props) {
                   "flex items-center justify-between gap-3 rounded-md py-1 pr-2 transition-colors",
                   flat ? "pl-4" : INDENT[section.depth],
                   isCategory ? "font-semibold text-fg" : "text-muted hover:text-fg",
-                  active && !isCategory ? "bg-surface text-fg" : "",
+                  active ? "bg-surface text-fg" : "",
                 ].join(" ")}
               >
                 <span className="truncate">{flat ? section.path.slice(1).join(" / ") : section.title}</span>

@@ -273,7 +273,9 @@ function EmptyState({ query, categoryTitle, elsewhere, contributeUrl, onShowAll,
 
 /**
  * Tracks the last section whose top is within 24px of the sticky toolbar,
- * falling back to the first section. `layoutKey` re-runs it when the list changes.
+ * falling back to the first section. At the bottom of the page, sections can
+ * no longer reach the toolbar, so a visible #hash target wins there.
+ * `layoutKey` re-runs it when the list changes.
  */
 function useActiveSection(toolbarRef: RefObject<HTMLElement | null>, layoutKey: string) {
   const [activeId, setActiveId] = useState<string>();
@@ -289,6 +291,9 @@ function useActiveSection(toolbarRef: RefObject<HTMLElement | null>, layoutKey: 
         if (el.getBoundingClientRect().top > line) break;
         current = el.dataset.section;
       }
+      const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+      const hashed = atBottom ? document.getElementById(window.location.hash.slice(1)) : null;
+      if (hashed?.dataset.section && hashed.getBoundingClientRect().top < window.innerHeight) current = hashed.dataset.section;
       setActiveId(current);
     };
     const onScroll = () => {
@@ -296,8 +301,10 @@ function useActiveSection(toolbarRef: RefObject<HTMLElement | null>, layoutKey: 
     };
     update();
     window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("hashchange", onScroll);
     return () => {
       window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("hashchange", onScroll);
       cancelAnimationFrame(frame);
     };
   }, [toolbarRef, layoutKey]);
@@ -348,7 +355,11 @@ function useUrlState({ query, setQuery, category, setCategory, categories, settl
   // Declared before the read effect so the mount commit, which still shows the full list, skips it.
   useEffect(() => {
     if (!pendingHash.current || !settled) return;
-    document.getElementById(decodeURIComponent(pendingHash.current))?.scrollIntoView();
+    // Section ids are ASCII slugs, so the raw hash needs no decoding (which can throw).
+    const target = document.getElementById(pendingHash.current);
+    // A section the filter hides would leave the page clamped at the footer, so start over at the top.
+    if (target) target.scrollIntoView();
+    else window.scrollTo(0, 0);
     pendingHash.current = undefined;
   }, [settled, query, category]);
 
