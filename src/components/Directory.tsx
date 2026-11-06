@@ -41,19 +41,21 @@ export default function Directory({ categories, sections, entries, contributeUrl
   const toc = groups ? groups.map((g) => ({ section: g.section, count: g.entries.length })) : tocItems(sections, visible);
   const activeId = useActiveSection(toolbarRef, `${deferredQuery}|${category}`);
 
-  useUrlState({ query, setQuery, category, setCategory, categories });
+  // The list matches the URL state only once the deferred query has caught up.
+  const settled = deferredQuery === query.trim();
+  useUrlState({ query, setQuery, category, setCategory, categories, settled });
   useSearchShortcut(inputRef);
 
   // When the user's own filter change shrinks the list under a scrolled page,
   // bring the first result up to just below the toolbar. State restored from
-  // the URL on load does not count, so a #section link keeps its position.
+  // the URL on load does not count; useUrlState restores the #section instead.
   const userChanged = useRef(false);
   const changeQuery = (value: string) => {
-    userChanged.current = true;
+    if (value.trim() !== query.trim()) userChanged.current = true;
     setQuery(value);
   };
   const changeCategory = (value: string) => {
-    userChanged.current = true;
+    if (value !== category) userChanged.current = true;
     setCategory(value);
   };
   useEffect(() => {
@@ -149,7 +151,7 @@ export default function Directory({ categories, sections, entries, contributeUrl
                 <Dialog.Backdrop className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm transition-opacity duration-200 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0" />
                 <Dialog.Popup className="fixed inset-y-0 left-0 z-50 flex w-[min(20rem,85vw)] flex-col border-r border-line bg-bg shadow-2xl transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] data-[ending-style]:-translate-x-full data-[starting-style]:-translate-x-full">
                   <div className="flex items-center justify-between border-b border-line px-5 py-4">
-                    <Dialog.Title className="text-sm font-semibold">Sections</Dialog.Title>
+                    <Dialog.Title className="text-sm font-semibold">Jump to</Dialog.Title>
                     <Dialog.Close aria-label="Close" className="grid size-7 place-items-center rounded-md text-faint hover:bg-surface hover:text-fg">
                       <XMarkIcon className="size-4" />
                     </Dialog.Close>
@@ -269,7 +271,10 @@ function EmptyState({ query, categoryTitle, elsewhere, contributeUrl, onShowAll,
   );
 }
 
-/** Tracks the last section whose top has scrolled under the sticky toolbar. `layoutKey` re-runs it when the list changes. */
+/**
+ * Tracks the last section whose top is within 24px of the sticky toolbar,
+ * falling back to the first section. `layoutKey` re-runs it when the list changes.
+ */
 function useActiveSection(toolbarRef: RefObject<HTMLElement | null>, layoutKey: string) {
   const [activeId, setActiveId] = useState<string>();
 
@@ -277,10 +282,10 @@ function useActiveSection(toolbarRef: RefObject<HTMLElement | null>, layoutKey: 
     let frame = 0;
     const update = () => {
       frame = 0;
-      // 64px clears the "N results" status line that sits above the first section.
-      const line = (toolbarRef.current?.getBoundingClientRect().bottom ?? 0) + 64;
-      let current: string | undefined;
-      for (const el of document.querySelectorAll<HTMLElement>("[data-section]")) {
+      const line = (toolbarRef.current?.getBoundingClientRect().bottom ?? 0) + 24;
+      const all = document.querySelectorAll<HTMLElement>("[data-section]");
+      let current = all[0]?.dataset.section;
+      for (const el of all) {
         if (el.getBoundingClientRect().top > line) break;
         current = el.dataset.section;
       }
@@ -324,21 +329,37 @@ type UrlState = {
   category: string;
   setCategory: (c: string) => void;
   categories: Section[];
+  settled: boolean;
 };
 
 /**
  * Reads ?q= and ?category= once after hydration, then mirrors state back with
  * replaceState. The write effect skips its first run, which still sees the
  * pre-URL state and would otherwise strip the params before they apply.
+ *
+ * The browser scrolls to a #section in the full server-rendered list, before
+ * the filter shortens it. So when the URL also filters, scroll to the hash
+ * again once the filtered list has rendered.
  */
-function useUrlState({ query, setQuery, category, setCategory, categories }: UrlState) {
+function useUrlState({ query, setQuery, category, setCategory, categories, settled }: UrlState) {
   const ready = useRef(false);
+  const pendingHash = useRef<string | undefined>(undefined);
+
+  // Declared before the read effect so the mount commit, which still shows the full list, skips it.
+  useEffect(() => {
+    if (!pendingHash.current || !settled) return;
+    document.getElementById(decodeURIComponent(pendingHash.current))?.scrollIntoView();
+    pendingHash.current = undefined;
+  }, [settled, query, category]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    setQuery(params.get("q") ?? "");
+    const q = params.get("q") ?? "";
     const fromUrl = params.get("category");
-    if (fromUrl && categories.some((c) => c.id === fromUrl)) setCategory(fromUrl);
+    const validCategory = fromUrl && categories.some((c) => c.id === fromUrl) ? fromUrl : undefined;
+    setQuery(q);
+    if (validCategory) setCategory(validCategory);
+    if ((q.trim() || validCategory) && window.location.hash) pendingHash.current = window.location.hash.slice(1);
   }, []);
 
   useEffect(() => {
