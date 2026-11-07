@@ -226,8 +226,9 @@ export default function Directory({ categories, sections, entries, contributeUrl
                 </div>
               ))
           )}
-          {/* The empty state has its own submit link, so the closing content only follows real results. */}
-          {visible.length > 0 && children}
+          {/* The empty state has its own submit link, so the closing content only follows real results.
+              Search results lack the category wrapper's bottom padding, so add it back here. */}
+          {visible.length > 0 && <div className={groups ? "pt-6" : undefined}>{children}</div>}
         </div>
       </div>
     </>
