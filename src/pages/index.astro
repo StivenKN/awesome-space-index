@@ -1,6 +1,8 @@
 ---
 import { PlusIcon } from "@heroicons/react/16/solid";
+import ContributeActions from "../components/ContributeActions.astro";
 import Directory from "../components/Directory";
+import GitHubMark from "../components/GitHubMark.astro";
 import Logo from "../components/Logo.astro";
 import Layout from "../layouts/Layout.astro";
 import { loadDirectory, UPSTREAM_REPO } from "../lib/source";
@@ -29,7 +31,10 @@ const stats = [
       Awesome Space
     </a>
     <nav class="flex items-center gap-1 text-[13px] font-medium text-muted">
-      <a href={UPSTREAM_REPO} class="rounded-md px-2.5 py-1.5 transition-colors hover:text-fg">GitHub</a>
+      <a href={UPSTREAM_REPO} class="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 transition-colors hover:text-fg">
+        <GitHubMark class="size-4" />
+        GitHub
+      </a>
       <a
         href={contributeUrl}
         class="flex items-center gap-1 rounded-lg bg-fg px-3 py-1.5 text-bg transition-opacity hover:opacity-85"
@@ -57,9 +62,10 @@ const stats = [
         </h1>
         <p class="mt-6 max-w-xl text-lg leading-7 text-muted text-pretty">
           A community list of open resources for astronomy, Earth observation, mission design and spacecraft
-          engineering. Search it, or browse by section.
+          engineering. Search it, browse by section, or submit what's missing.
         </p>
-        <dl class="mt-10 flex gap-6 text-sm sm:gap-10">
+        <ContributeActions contributeUrl={contributeUrl} class="mt-8" />
+        <dl class="mt-12 flex gap-6 text-sm sm:gap-10">
           {
             stats.map((stat) => (
               <div class="flex items-baseline gap-1.5">
@@ -72,7 +78,18 @@ const stats = [
       </div>
     </section>
 
-    <Directory client:load {...directory} contributeUrl={contributeUrl} />
+    <Directory client:load {...directory} contributeUrl={contributeUrl}>
+      <section aria-labelledby="contribute-title" class="mx-4 rounded-2xl border border-line bg-surface p-6 sm:p-8">
+        <h2 id="contribute-title" class="text-2xl font-semibold tracking-[-0.025em] text-balance">
+          Know a resource the list is missing?
+        </h2>
+        <p class="mt-2 max-w-xl text-[15px] leading-6 text-muted text-pretty">
+          The list lives on GitHub and grows through pull requests. Once a pull request to orbitalindex/awesome-space is
+          merged, the resource shows up here after the next daily rebuild.
+        </p>
+        <ContributeActions contributeUrl={contributeUrl} class="mt-6" />
+      </section>
+    </Directory>
   </main>
 
   <footer class="border-t border-line">

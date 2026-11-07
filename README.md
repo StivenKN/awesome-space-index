@@ -2,7 +2,7 @@
 
 A searchable website for [Awesome Space](https://github.com/orbitalindex/awesome-space), the list of space-related code, APIs and data curated by [The Orbital Index](https://orbitalindex.com). Started from [orbitalindex/awesome-space#31](https://github.com/orbitalindex/awesome-space/issues/31).
 
-The upstream README is the only source of content. Every build fetches it, parses it into categories, sections and entries, and renders one static page. A daily GitHub Actions run rebuilds and redeploys, so new entries show up within a day of merging upstream. To add or change a resource, open a PR on [orbitalindex/awesome-space](https://github.com/orbitalindex/awesome-space/blob/master/contributing.md), not here.
+The upstream README is the only source of content. Every build fetches it, parses it into categories, sections and entries, and renders one static page. A daily GitHub Actions run rebuilds and redeploys, so entries merged upstream show up after the next run. To add or change a resource, open a PR on [orbitalindex/awesome-space](https://github.com/orbitalindex/awesome-space/blob/master/contributing.md), not here.
 
 ## How it works
 
