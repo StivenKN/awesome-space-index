@@ -181,7 +181,7 @@ export default function Directory({ categories, sections, entries, contributeUrl
           </div>
         </aside>
 
-        <div ref={resultsRef} className="-mx-4 min-w-0 pb-24">
+        <div ref={resultsRef} className="-mx-4 min-w-0 pb-12">
           {/* The one live region: a short status line, visible only while searching. */}
           <p aria-live="polite" className={matches ? "px-4 pb-6 text-sm text-muted" : "sr-only"}>
             {status}
