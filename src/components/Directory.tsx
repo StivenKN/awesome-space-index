@@ -4,14 +4,18 @@ import { ScrollArea } from "@base-ui/react/scroll-area";
 import { Toggle } from "@base-ui/react/toggle";
 import { ToggleGroup } from "@base-ui/react/toggle-group";
 import { Bars3BottomLeftIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/16/solid";
-import { useDeferredValue, useEffect, useId, useMemo, useRef, useState, type RefObject } from "react";
+import { useDeferredValue, useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { groupBySection, tocItems } from "../lib/directory";
 import type { Directory as DirectoryData, Section } from "../lib/parse";
 import { createSearch } from "../lib/search";
 import { SectionBlock } from "./SectionBlock";
 import { Toc } from "./Toc";
 
-type Props = DirectoryData & { contributeUrl: string };
+type Props = DirectoryData & {
+  contributeUrl: string;
+  /** Static content rendered after the list, in the list column. Hidden while the empty state shows. */
+  children?: ReactNode;
+};
 
 const ALL = "all";
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -21,7 +25,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
  * then hydrated for search, category filters and the table of contents.
  * The query and category live in the URL (?q=&category=) so results are shareable.
  */
-export default function Directory({ categories, sections, entries, contributeUrl }: Props) {
+export default function Directory({ categories, sections, entries, contributeUrl, children }: Props) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(ALL);
   const [tocOpen, setTocOpen] = useState(false);
@@ -181,7 +185,7 @@ export default function Directory({ categories, sections, entries, contributeUrl
           </div>
         </aside>
 
-        <div ref={resultsRef} className="-mx-4 min-w-0 pb-12">
+        <div ref={resultsRef} className="-mx-4 min-w-0 pb-16">
           {/* The one live region: a short status line, visible only while searching. */}
           <p aria-live="polite" className={matches ? "px-4 pb-6 text-sm text-muted" : "sr-only"}>
             {status}
@@ -222,6 +226,8 @@ export default function Directory({ categories, sections, entries, contributeUrl
                 </div>
               ))
           )}
+          {/* The empty state has its own submit link, so the closing content only follows real results. */}
+          {visible.length > 0 && children}
         </div>
       </div>
     </>
